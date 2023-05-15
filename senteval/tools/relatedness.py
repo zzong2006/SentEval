@@ -26,8 +26,19 @@ class RelatednessPytorch(object):
         # fix seed
         np.random.seed(config['seed'])
         torch.manual_seed(config['seed'])
-        assert torch.cuda.is_available(), 'torch.cuda required for Relatedness'
-        torch.cuda.manual_seed(config['seed'])
+        if not torch.backends.mps.is_available():
+            if not torch.backends.mps.is_built():
+                print("MPS not available because the current PyTorch install was not "
+                      "built with MPS enabled.")
+            else:
+                print("MPS not available because the current MacOS version is not 12.3+ "
+                      "and/or you do not have an MPS-enabled device on this machine.")
+            self.mps_device = None
+        else:
+            self.mps_device = torch.device("mps")
+
+        assert self.mps_device is not None
+        torch.mps.manual_seed(config['seed'])
 
         self.train = train
         self.valid = valid
@@ -48,24 +59,25 @@ class RelatednessPytorch(object):
         )
         self.loss_fn = nn.MSELoss()
 
-        if torch.cuda.is_available():
-            self.model = self.model.cuda()
-            self.loss_fn = self.loss_fn.cuda()
+        self.model = self.model.to(self.mps_device)
+        self.loss_fn = self.loss_fn.to(self.mps_device)
 
         self.loss_fn.size_average = False
         self.optimizer = optim.Adam(self.model.parameters(),
                                     weight_decay=self.l2reg)
 
     def prepare_data(self, trainX, trainy, devX, devy, testX, testy):
-        # Transform probs to log-probs for KL-divergence
-        trainX = torch.from_numpy(trainX).float().cuda()
-        trainy = torch.from_numpy(trainy).float().cuda()
-        devX = torch.from_numpy(devX).float().cuda()
-        devy = torch.from_numpy(devy).float().cuda()
-        testX = torch.from_numpy(testX).float().cuda()
-        testY = torch.from_numpy(testy).float().cuda()
+        mps_device = torch.device("mps")
 
-        return trainX, trainy, devX, devy, testX, testy
+        # Transform probs to log-probs for KL-divergence
+        trainX = torch.from_numpy(trainX).float().to(mps_device)
+        trainy = torch.from_numpy(trainy).float().to(mps_device)
+        devX = torch.from_numpy(devX).float().to(mps_device)
+        devy = torch.from_numpy(devy).float().to(mps_device)
+        testX = torch.from_numpy(testX).float().to(mps_device)
+        testY = torch.from_numpy(testy).float().to(mps_device)
+
+        return trainX, trainy, devX, devy, testX, testY
 
     def run(self):
         self.nepoch = 0
@@ -78,7 +90,8 @@ class RelatednessPytorch(object):
         trainX, trainy, devX, devy, testX, testy = self.prepare_data(
             self.train['X'], self.train['y'],
             self.valid['X'], self.valid['y'],
-            self.test['X'], self.test['y'])
+            self.test['X'], self.test['y']
+        )
 
         # Training
         while not stop_train and self.nepoch <= self.maxepoch:
@@ -107,7 +120,7 @@ class RelatednessPytorch(object):
             all_costs = []
             for i in range(0, len(X), self.batch_size):
                 # forward
-                idx = torch.from_numpy(permutation[i:i + self.batch_size]).long().cuda()
+                idx = torch.from_numpy(permutation[i:i + self.batch_size]).long().to(self.mps_device)
                 Xbatch = X[idx]
                 ybatch = y[idx]
                 output = self.model(Xbatch)

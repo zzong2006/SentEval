@@ -12,12 +12,12 @@ import io
 import numpy as np
 import logging
 
-
 # Set PATHs
 PATH_TO_SENTEVAL = '../'
 PATH_TO_DATA = '../data'
 # PATH_TO_VEC = 'glove/glove.840B.300d.txt'
-PATH_TO_VEC = 'fasttext/crawl-300d-2M.vec'
+PATH_TO_VEC = '../fasttext/wiki-news-300d-1M.vec'
+# PATH_TO_VEC = '../fasttext/crawl-300d-2M.vec'
 
 # import SentEval
 sys.path.insert(0, PATH_TO_SENTEVAL)
@@ -50,6 +50,7 @@ def create_dictionary(sentences, threshold=0):
 
     return id2word, word2id
 
+
 # Get word vectors from vocabulary (glove, word2vec, fasttext ..)
 def get_wordvec(path_to_vec, word2id):
     word_vec = {}
@@ -73,7 +74,11 @@ def prepare(params, samples):
     params.wvec_dim = 300
     return
 
+
 def batcher(params, batch):
+    """
+        Every sentence of the given batch, it averages to get embedding of tokens
+    """
     batch = [sent if sent != [] else ['.'] for sent in batch]
     embeddings = []
 
@@ -97,16 +102,18 @@ params_senteval = {'task_path': PATH_TO_DATA, 'usepytorch': True, 'kfold': 5}
 params_senteval['classifier'] = {'nhid': 0, 'optim': 'rmsprop', 'batch_size': 128,
                                  'tenacity': 3, 'epoch_size': 2}
 
+
 # Set up logger
 logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
 
 if __name__ == "__main__":
     se = senteval.engine.SE(params_senteval, batcher, prepare)
-    transfer_tasks = ['STS12', 'STS13', 'STS14', 'STS15', 'STS16',
-                      'MR', 'CR', 'MPQA', 'SUBJ', 'SST2', 'SST5', 'TREC', 'MRPC',
-                      'SICKEntailment', 'SICKRelatedness', 'STSBenchmark',
-                      'Length', 'WordContent', 'Depth', 'TopConstituents',
-                      'BigramShift', 'Tense', 'SubjNumber', 'ObjNumber',
-                      'OddManOut', 'CoordinationInversion']
+    transfer_tasks = ['STSBenchmark']
+    # transfer_tasks = ['STS12', 'STS13', 'STS14', 'STS15', 'STS16',
+    #                   'MR', 'CR', 'MPQA', 'SUBJ', 'SST2', 'SST5', 'TREC', 'MRPC',
+    #                   'SICKEntailment', 'SICKRelatedness', 'STSBenchmark',
+    #                   'Length', 'WordContent', 'Depth', 'TopConstituents',
+    #                   'BigramShift', 'Tense', 'SubjNumber', 'ObjNumber',
+    #                   'OddManOut', 'CoordinationInversion']
     results = se.eval(transfer_tasks)
     print(results)
